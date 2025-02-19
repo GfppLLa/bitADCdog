@@ -21,11 +21,11 @@
 #define BOTAO_A 5
 #define BOTAO_J 22
 #define BOTAO_C 6
-volatile _Atomic uint32_t ultimo_acionamento //para debouncing
+volatile _Atomic uint32_t ultimo_acionamento; //para debouncing
 static volatile uint32_t ultimo_pressionamento = 0;
 volatile uint32_t hora_presente;
 //pwm
-#define WRAP 6000
+#define WRAP 65535
 
 //joystick
 #define EIXO_X 27 //para virar adc1
@@ -34,18 +34,21 @@ volatile uint16_t posicao_x;
 volatile uint16_t posicao_y;
 
 
+
 // display
 #define I2C_PORT i2c1
 #define I2C_SDA 14
 #define I2C_SCL 15
 #define ADRRS 0x3C
-#define SCREEN_WIDTH 64
-#define SCREEN_HEIGHT 128
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
 #define SIDE_BOX 8
 #define UP_BOX8 8
-#define CENTRO_X 2131
-#define CENTRO_Y 1990
+#define CENTRO_X 2000
+#define CENTRO_Y 1735
 #define ZONA_OFF 45
+#define BUZZER_A_PIN 10       // Pino para o buzzer A
+#define BUZZER_B_PIN 21       // Pino para o buzzer B
 
 //variaveis
 #define DEBOUNCING_TIME_US 220
@@ -55,13 +58,14 @@ volatile _Atomic uint ledsAreLigados=1;
 volatile _Atomic uint sobe_um=0;
 volatile _Atomic uint desce_um=0;
 volatile _Atomic bool estado_verde =false;
-volatile _Atomic uint teste_um=0;
+volatile _Atomic uint saida_teste=0;
+volatile _Atomic uint borda=0;
 
 
 void atualiza_leds(uint led, uint16_t valor_adc, uint16_t centro)
 {
     int desvio, maximo;
-    (if ledsAreLigados==0)
+    if(ledsAreLigados==0)
     {
         pwm_set_gpio_level(led, 0);
         return;
@@ -76,7 +80,10 @@ void atualiza_leds(uint led, uint16_t valor_adc, uint16_t centro)
         else{
             if(desvio>0){maximo=4095-centro;}
             else{maximo=centro;}
-            pwm_set_gpio_level(led, (((abs(desvio)-ZONA_OFF)*WRAP)/(maximo-ZONA_OFF)));
+            //pwm_set_gpio_level(led, (((abs(desvio)-ZONA_OFF)*WRAP)/(maximo-ZONA_OFF)));
+            int desvioDois=abs(desvio)-ZONA_OFF;
+            int desvioTres=(desvioDois*WRAP)/(maximo-ZONA_OFF);
+            pwm_set_gpio_level(led, desvioTres);
             return;
         }
     }
@@ -123,7 +130,7 @@ void tratar_botoes(uint gpio, uint32_t events)
 
 uint16_t ler_adc(uint canaladc)
 {
-    adc_select_read(canaladc);
+    adc_select_input(canaladc);
     uint16_t leitura =adc_read();
     return leitura;
 }
@@ -164,12 +171,12 @@ void iniciaHardware()
     //adc
     adc_init();//inicializa o analog digital converter
     adc_gpio_init(EIXO_X);//inicia gio joy x para adc
-    adc_gpio_init(EIXO_Y)//inicia gpio joy y para adc
+    adc_gpio_init(EIXO_Y);//inicia gpio joy y para adc
 
 //display no i2c
     i2c_init(I2C_PORT, 400*1000);
 
-    gpio_set_funcion(I2C_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
     gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
     gpio_pull_up(I2C_SCL);
     gpio_pull_up(I2C_SDA);
@@ -191,13 +198,53 @@ void iniciaHardware()
     gpio_set_dir(BOTAO_C, GPIO_IN);
     gpio_pull_up(BOTAO_C);
 
+}
+int converteADC(uint16_t centro,uint16_t adc, uint16_t max_tela)
+{
+    uint16_t minimo;
+    uint16_t maximo=4095-centro;
+    int desvio=adc-centro;
+    int valor;
+    if(desvio<0)
+    {
+        valor=((desvio*(max_tela/2))/minimo)+(max_tela/2);
+    }else{
+        valor=((desvio*(max_tela/2))/maximo)+(max_tela/2);
+    }
+    if(valor<0)
+    {
+        valor=0;
+    }
+    if(valor>max_tela)
+    {
+        valor=max_tela;
+    }
+    if(valor<borda)
+    {
+        valor=borda;
+    }
+    return valor;
+}
+void quadradoEmTela(uint16_t eixox, uint16_t eixoy)
+{
+    uint16_t limiteXTela=SCREEN_WIDTH-SIDE_BOX-borda;//assina o limite da tela com a borda
+    uint16_t limiteYTela=SCREEN_HEIGHT-SIDE_BOX-borda;//igualmente porem pro eixo y
+    posicao_x=converteADC(CENTRO_X,eixox, limiteXTela);
+    posicao_y=SCREEN_HEIGHT-SIDE_BOX-converteADC(CENTRO_Y,eixoy, limiteYTela);
 
+    ssd1306_fill(&ssd, false);//preenche a tela com vazio
 
-
-
+    for(int i=0; i<borda; i++)
+    {
+        ssd1306_hline(&ssd, 0,SCREEN_WIDTH-1, i, true);
+        ssd1306_hline(&ssd, 0,SCREEN_WIDTH-1, SCREEN_HEIGHT-1-i,true); 
+        ssd1306_hline(&ssd, i,0,SCREEN_HEIGHT-1,true);
+        ssd1306_hline(&ssd, SCREEN_WIDTH-1-i,0, SCREEN_WIDTH-1,true); 
+    }
+    ssd1306_rect(&ssd, posicao_y, posicao_x, SIDE_BOX, SIDE_BOX, true, true);
+    ssd1306_send_data(&ssd);
 
 }
-
 int main()
 {
     stdio_init_all();
@@ -214,17 +261,18 @@ int main()
     if(sobe_um==1)
     {
         //desligas os leds azul e vermelho
-        ledsAreLigados=0;
+        ledsAreLigados=!ledsAreLigados;
         sobe_um=0;
     }
     if(desce_um==1)
     {
         //muda estado led verde
-        estado_verde=!estado_verde;
-        gpio_put(LED_VERDE, estado_verde);
-        desce_um=0;
+        estado_verde=!estado_verde;//recebe o oposto do estado atual do led
+        gpio_put(LED_VERDE, estado_verde);//put o oposto do estado atual
+        desce_um=0;//reseta a variavel de controle
+        borda=(borda+1)%7;//7 linhas de borda
     }
-    if(teste_um==1)
+    if(saida_teste==1)
     {
         mensagem_bootloader(&ssd);
         entrarModoBootloaderDois();
@@ -233,6 +281,7 @@ int main()
     }
     posicao_x=ler_adc(1);
     posicao_y=ler_adc(0);
+    printf("\n\n------posicao x: %ld\n\nposicao y: %ld\n\n-------", posicao_x, posicao_y);
     //função para atualizar os leds já com as posições x e y
     atualiza_leds(LED_AZUL, posicao_x, CENTRO_X);
     atualiza_leds(LED_VERMELHO, posicao_y, CENTRO_Y);

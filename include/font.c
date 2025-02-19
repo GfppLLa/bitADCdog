@@ -1,6 +1,6 @@
 
 // Fontes para A-Z e 0-9. Os caracteres tem 8x8 pixels
-#include "include/libraries/font.h"
+#include "include/font.h"
 
  uint8_t font[] = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Nothing

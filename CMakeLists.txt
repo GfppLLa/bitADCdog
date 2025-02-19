@@ -38,7 +38,7 @@ pico_sdk_init()
 add_executable(bitADCdog 
                 bitADCdog.c 
                 include/ssd1306.c 
-                include/font.h
+                include/font.c
                 )
 
 pico_set_program_name(bitADCdog "bitADCdog")
@@ -70,8 +70,6 @@ target_link_libraries(bitADCdog
         hardware_timer
         hardware_clocks
         hardware_pwm
-        pico_bootroom
-        
         )
 
 pico_add_extra_outputs(bitADCdog)
