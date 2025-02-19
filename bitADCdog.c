@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
-#include "hardware/spi.h"
 #include "hardware/i2c.h"
-#include "hardware/pio.h"
+#include "hardware/adc.h"
+#include "hardware/timer.h"
 #include "hardware/clocks.h"
-
+#include "hardware/uart.h"
+#include "hardware/pwm.h"
 //leds
 #define LED_VERDE 11
 #define LED_AZUL 12
@@ -34,6 +35,9 @@ volatile uint16_t posicao_y;
 #define SCREEN_HEIGHT 128
 #define SIDE_BOX 8
 #define UP_BOX8 8
+#define CENTRO_X 2131
+#define CENTRO_Y 1990
+#define ZONA_OFF 45
 
 //variaveis
 #define DEBOUNCING_TIME_US 220
@@ -42,7 +46,32 @@ volatile _Atomic uint azuIsLigado=0;
 volatile _Atomic uint ledsAreLigados=1; 
 volatile _Atomic uint sobe_um=0;
 volatile _Atomic uint desce_um=0;
+volatile _Atomic bool estado_verde =false;
 
+
+void atualiza_leds(uint led, uint16_t valor_adc, uint16_t centro)
+{
+    int desvio, maximo;
+    (if ledsAreLigados==0)
+    {
+        pwm_set_gpio_level(led, 0);
+        return;
+    }
+    else {
+        desvio=valor_adc-centro;
+        if(desvio>-ZONA_OFF&&desvio<ZONA_OFF)//se tiver no centro
+        {
+            pwm_set_gpio_level(led, 0);
+            return;
+        }
+        else{
+            if(desvio>0){maximo=4095-centro;}
+            else{maximo=centro;}
+            pwm_set_gpio_level(led, (((abs(desvio)-ZONA_OFF)*WRAP)/(maximo-ZONA_OFF)));
+            return;
+        }
+    }
+}
 void tratar_botoes(uint gpio, uint32_t events)
 {
     //debounce();
@@ -57,8 +86,6 @@ void tratar_botoes(uint gpio, uint32_t events)
                     sobe_um=1;//desligas os leds
             }
         }
-    
-    //
 
     } else if( gpio ==BOTAO_J)
     {
@@ -71,11 +98,15 @@ void tratar_botoes(uint gpio, uint32_t events)
         }
     
             ultimo_pressionamento=hora_presente;
+    }
 
 }
-void ler_adc()
-{
 
+uint16_t ler_adc(uint canaladc)
+{
+    adc_select_read(canaladc);
+    uint16_t leitura =adc_read();
+    return leitura;
 }
 
 void iniciaHardware()
@@ -153,7 +184,23 @@ int main()
 
     while(true)
    {
-
+    if(sobe_um==1)
+    {
+        //desligas os leds azul e vermelho
+        ledsAreLigados=0;
+        sobe_um=0;
+    }
+    if(desce_um==1)
+    {
+        //muda estado led verde
+        estado_verde=!estado_verde;
+        gpio_put(LED_VERDE, estado_verde);
+        desce_um=0;
+    }
+    posicao_x=ler_adc(1);
+    posicao_y=ler_adc(0);
+    //função para atualizar os leds já com as posições x e y
+    
    }
 }
 
