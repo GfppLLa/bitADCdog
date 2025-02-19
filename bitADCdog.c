@@ -201,7 +201,7 @@ void iniciaHardware()
 }
 int converteADC(uint16_t centro,uint16_t adc, uint16_t max_tela)
 {
-    uint16_t minimo;
+    uint16_t minimo=centro;
     uint16_t maximo=4095-centro;
     int desvio=adc-centro;
     int valor;
@@ -236,10 +236,22 @@ void quadradoEmTela(uint16_t eixox, uint16_t eixoy)
 
     for(int i=0; i<borda; i++)
     {
-        ssd1306_hline(&ssd, 0,SCREEN_WIDTH-1, i, true);
-        ssd1306_hline(&ssd, 0,SCREEN_WIDTH-1, SCREEN_HEIGHT-1-i,true); 
-        ssd1306_hline(&ssd, i,0,SCREEN_HEIGHT-1,true);
-        ssd1306_hline(&ssd, SCREEN_WIDTH-1-i,0, SCREEN_WIDTH-1,true); 
+        if(i%2==0)
+        {
+            ssd1306_hline(&ssd, 0,SCREEN_WIDTH-1, i, true);
+        }
+        if(i%2==0)
+        {
+            ssd1306_hline(&ssd, 0,SCREEN_WIDTH-1, SCREEN_HEIGHT-1-i,true);
+        } 
+        if(i%2==0)
+        {
+            ssd1306_vline(&ssd, i,0,SCREEN_HEIGHT-1,true);
+        }
+        if(i%2==0)
+        {
+            ssd1306_vline(&ssd, SCREEN_WIDTH-1-i,0, SCREEN_WIDTH-1,true);
+        } 
     }
     ssd1306_rect(&ssd, posicao_y, posicao_x, SIDE_BOX, SIDE_BOX, true, true);
     ssd1306_send_data(&ssd);
@@ -270,7 +282,7 @@ int main()
         estado_verde=!estado_verde;//recebe o oposto do estado atual do led
         gpio_put(LED_VERDE, estado_verde);//put o oposto do estado atual
         desce_um=0;//reseta a variavel de controle
-        borda=(borda+1)%7;//7 linhas de borda
+        borda=(borda+1)%20;//7 linhas de borda
     }
     if(saida_teste==1)
     {
@@ -285,6 +297,7 @@ int main()
     //função para atualizar os leds já com as posições x e y
     atualiza_leds(LED_AZUL, posicao_x, CENTRO_X);
     atualiza_leds(LED_VERMELHO, posicao_y, CENTRO_Y);
+    quadradoEmTela(posicao_x, posicao_y);
 
     
    }
