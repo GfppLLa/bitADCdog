@@ -35,7 +35,11 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(bitADCdog bitADCdog.c )
+add_executable(bitADCdog 
+                bitADCdog.c 
+                include/ssd1306.c 
+                include/font.h
+                )
 
 pico_set_program_name(bitADCdog "bitADCdog")
 pico_set_program_version(bitADCdog "0.1")
@@ -49,19 +53,24 @@ pico_enable_stdio_usb(bitADCdog 1)
 
 # Add the standard library to the build
 target_link_libraries(bitADCdog
-        pico_stdlib)
+        pico_stdlib
+        pico_stdio
+        )
 
 # Add the standard include files to the build
 target_include_directories(bitADCdog PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
 # Add any user requested libraries
 target_link_libraries(bitADCdog 
-        hardware_spi
+        hardware_adc
         hardware_i2c
-        hardware_pio
+        hardware_timer
         hardware_clocks
+        hardware_pwm
+        pico_bootroom
         
         )
 

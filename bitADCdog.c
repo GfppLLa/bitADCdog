@@ -6,6 +6,13 @@
 #include "hardware/clocks.h"
 #include "hardware/uart.h"
 #include "hardware/pwm.h"
+#include "pico/bootrom.h"
+#include <math.h>
+#include <time.h>
+#include <stdlib.h>
+#include "include/ssd1306.h"
+#include "include/font.h"
+
 //leds
 #define LED_VERDE 11
 #define LED_AZUL 12
@@ -13,6 +20,7 @@
 //botoes
 #define BOTAO_A 5
 #define BOTAO_J 22
+#define BOTAO_C 6
 volatile _Atomic uint32_t ultimo_acionamento //para debouncing
 static volatile uint32_t ultimo_pressionamento = 0;
 volatile uint32_t hora_presente;
@@ -47,6 +55,7 @@ volatile _Atomic uint ledsAreLigados=1;
 volatile _Atomic uint sobe_um=0;
 volatile _Atomic uint desce_um=0;
 volatile _Atomic bool estado_verde =false;
+volatile _Atomic uint teste_um=0;
 
 
 void atualiza_leds(uint led, uint16_t valor_adc, uint16_t centro)
@@ -96,9 +105,19 @@ void tratar_botoes(uint gpio, uint32_t events)
                     desce_um=1;//mudar estado led verde e mudar as bordas do lcd
             }
         }
+    } else if(gpio==BOTAO_C)
+    {
+        if(hora_presente-ultimo_pressionamento>DEBOUNCING_TIME_US*1000)
+        {
+            bool botao_pressionado=!gpio_get(BOTAO_C);
+            if(botao_pressionado)
+            {saida_teste=1;}
+        }
+
+    }
     
             ultimo_pressionamento=hora_presente;
-    }
+    
 
 }
 
@@ -168,19 +187,27 @@ void iniciaHardware()
     gpio_init(BOTAO_J);
     gpio_set_dir(BOTAO_J, GPIO_IN);
     gpio_pull_up(BOTAO_J);
+    gpio_init(BOTAO_C);
+    gpio_set_dir(BOTAO_C, GPIO_IN);
+    gpio_pull_up(BOTAO_C);
+
 
 
 
 
 
 }
+
 int main()
 {
     stdio_init_all();
     iniciaHardware();
     gpio_set_irq_enabled_with_callback(BOTAO_A, GPIO_IRQ_EDGE_FALL, true, &tratar_botoes);
     gpio_set_irq_enabled_with_callback(BOTAO_J, GPIO_IRQ_EDGE_FALL, true, &tratar_botoes);
-    sleep_ms(100);
+    gpio_set_irq_enabled_with_callback(BOTAO_C, GPIO_IRQ_EDGE_FALL, true, &tratar_botoes);
+   boas_vindas(&ssd);
+   entrarModoBootloader();
+    sleep_ms(2000);
 
     while(true)
    {
@@ -197,15 +224,43 @@ int main()
         gpio_put(LED_VERDE, estado_verde);
         desce_um=0;
     }
+    if(teste_um==1)
+    {
+        mensagem_bootloader(&ssd);
+        entrarModoBootloaderDois();
+        gpio_put(LED_AZUL,0);gpio_put(LED_VERDE,0);gpio_put(LED_VERMELHO,0);
+        reset_usb_boot(0, 0);
+    }
     posicao_x=ler_adc(1);
     posicao_y=ler_adc(0);
     //função para atualizar os leds já com as posições x e y
+    atualiza_leds(LED_AZUL, posicao_x, CENTRO_X);
+    atualiza_leds(LED_VERMELHO, posicao_y, CENTRO_Y);
+
     
    }
 }
 
 //funções herdadas
 //--------------------------
+void boas_vindas(ssd1306_t *ssd)
+{
+  ssd1306_fill(ssd,false); //Limpa display
+  ssd1306_rect(ssd,3,3,122,58,true,false); //Desenha retângulo
+  ssd1306_draw_string(ssd,"   gleison",4,25); 
+  ssd1306_draw_string(ssd,"   embarcatech",4,45);
+
+  ssd1306_send_data(ssd); //Atualiza o display
+}
+void mensagem_bootloader(ssd1306_t *ssd)
+{
+    ssd1306_fill(ssd,false); //Limpa display
+    sleep_ms(500);
+    ssd1306_rect(ssd,3,3,122,58,true,false); //Desenha retângulo
+    ssd1306_draw_string(ssd,"   PICO",4,25); 
+    ssd1306_draw_string(ssd,"   BOOTLOADER",4,45);
+    ssd1306_send_data(ssd); //Atualiza o display
+}
 void tocar_tom_buzzer(uint16_t frequency, uint32_t duration_ms) {
     gpio_set_function(BUZZER_B_PIN, GPIO_FUNC_PWM); // Configura pino do buzzer para PWM
     uint slice_num = pwm_gpio_to_slice_num(BUZZER_B_PIN);
